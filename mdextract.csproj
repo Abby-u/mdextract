@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Fmod5Sharp" Version="3.0.1" />
+    <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="AssetStudio">
+      <HintPath>AssetStudio.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

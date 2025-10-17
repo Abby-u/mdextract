@@ -101,6 +101,10 @@ namespace mdextract
 
         private static string target;
 
+        private static string musicpath;
+
+        private static string songpath;
+
         public static List<string> theoutput = new List<string>();
 
         static string normalizePath(string path)
@@ -241,13 +245,104 @@ namespace mdextract
             theoutput.Insert(0,targetDir + daName + ".json");
             //Console.WriteLine($"{daName}.json");
         }
+
+        static void extractMusicData()
+        {
+            var root = new System.Collections.Generic.List<AssetStudio.Object>();
+
+            if (string.IsNullOrEmpty(musicpath)) { return; }
+
+            try
+            {
+                var am = new AssetsManager();
+                am.LoadFiles(musicpath);
+                root = am.assetsFileList[0].Objects;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                Console.Out.Flush();
+            }
+
+            foreach (var thing in root)
+            {
+                if (thing.GetType() == typeof(AssetStudio.MonoBehaviour))
+                {
+                    createChartJson(thing, target);
+                }
+                else if (thing.GetType() == typeof(AssetStudio.AudioClip))
+                {
+                    AudioClip ac = new AudioClip(thing.reader);
+                    var res = ac.m_AudioData.GetData();
+                    var fsb = FsbLoader.LoadFsbFromByteArray(res).Samples[0];
+                    var ogg = FmodVorbisRebuilder.RebuildOggFile(fsb);
+                    System.IO.File.WriteAllBytes(target + ac.m_Name + ".ogg", ogg);
+                    //Console.WriteLine($"Exported {target+ac.m_Name}.ogg");
+                    theoutput.Insert(theoutput.Count, target + ac.m_Name + ".ogg");
+                }
+            }
+        }
+
+        static void extractSongData()
+        {
+            var root = new System.Collections.Generic.List<AssetStudio.Object>();
+
+            if (string.IsNullOrEmpty(songpath)) { return; }
+
+            try
+            {
+                var am = new AssetsManager();
+                am.LoadFiles(songpath);
+                root = am.assetsFileList[0].Objects;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                Console.Out.Flush();
+            }
+
+            foreach (var thing in root)
+            {
+                if (thing.GetType() == typeof(AssetStudio.AudioClip))
+                {
+                    AudioClip ac = new AudioClip(thing.reader);
+                    var res = ac.m_AudioData.GetData();
+                    var fsb = FsbLoader.LoadFsbFromByteArray(res).Samples[0];
+                    var ogg = FmodVorbisRebuilder.RebuildOggFile(fsb);
+                    System.IO.File.WriteAllBytes(target + ac.m_Name + ".ogg", ogg);
+                    theoutput.Insert(theoutput.Count, target + ac.m_Name + ".ogg");
+                }
+                //else if (thing.GetType() == typeof(AssetStudio.Texture2D))
+                //{
+                //    Texture2D tex = new Texture2D(thing.reader);
+                //    var img = tex.image_data.GetData();
+                //    System.IO.File.WriteAllBytes(target + tex.m_Name + ".png", img);
+                //    theoutput.Insert(theoutput.Count, target + tex.m_Name + ".png");
+                //}
+            }
+        }
+
+        static string findSimilarFile(string dir,string filename)
+        {
+            if (!Directory.Exists(dir)) { return ""; }
+            var files = Directory.GetFiles(dir);
+            foreach (var file in files)
+            {
+                if (Path.GetFileNameWithoutExtension(file).Contains(filename))
+                {
+                    return file;
+                }
+            }
+            return "";
+        }
         static void Main(string[] args)
         {
             Console.Out.Flush();
             string exedir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
             string noteDir = exedir +"\\"+ "notedata.json";
             noteDir = noteDir.Replace("\n", "\\n");
-            //Console.WriteLine(noteDir);
             if (!File.Exists(noteDir))
             {
                 Console.WriteLine("notedata.json not found (required)");
@@ -277,46 +372,34 @@ namespace mdextract
             path = System.IO.Path.GetFullPath(path);
             target = normalizePath(target);
 
-
-            //Console.WriteLine(target);
-            //Console.WriteLine(noteDir);
-
-            var root = new System.Collections.Generic.List<AssetStudio.Object>();
-
-            try
+            if (Path.GetFileName(path).Substring(0, 5) == "music")
             {
-                var am = new AssetsManager();
-                am.LoadFiles(path);
-                root = am.assetsFileList[0].Objects;
+                musicpath = path;
+                var tempfilename = "song" + Path.GetFileNameWithoutExtension(path).Substring(5);
+                songpath = findSimilarFile(Path.GetDirectoryName(path), tempfilename);
             }
-            catch (Exception ex)
+            else if (Path.GetFileName(path).Substring(0, 4) == "song")
             {
-                Console.WriteLine("Exception: " + ex.Message);
-                Console.WriteLine(ex.StackTrace);
-                Console.Out.Flush();
+                songpath = path;
+                var tempfilename = "music" + Path.GetFileNameWithoutExtension(path).Substring(4);
+                tempfilename = tempfilename.Substring(0,tempfilename.LastIndexOf('_'));
+                musicpath = findSimilarFile(Path.GetDirectoryName(path), tempfilename);
             }
-
-            //Console.WriteLine(noteDir);
-
-
-            foreach (var thing in root)
+            else
             {
-                if (thing.GetType() == typeof(AssetStudio.MonoBehaviour))
-                {
-                    createChartJson(thing,target);
-                }
-                else if (thing.GetType() == typeof(AssetStudio.AudioClip))
-                {
-                    AudioClip ac = new AudioClip(thing.reader);
-                    var res = ac.m_AudioData.GetData();
-                    var fsb = FsbLoader.LoadFsbFromByteArray(res).Samples[0];
-                    var ogg = FmodVorbisRebuilder.RebuildOggFile(fsb);
-                    System.IO.File.WriteAllBytes(target+ac.m_Name+".ogg", ogg);
-                    //Console.WriteLine($"Exported {target+ac.m_Name}.ogg");
-                    theoutput.Insert(theoutput.Count, target + ac.m_Name + ".ogg");
-                }
+                Console.WriteLine("Invalid file");
+                return;
             }
-            //Console.WriteLine(target);
+
+            extractMusicData();
+            extractSongData();
+
+            if (theoutput.Count<1)
+            {
+                Console.WriteLine("Empty bundle?");
+                return;
+            }
+
             string outputjson = JsonSerializer.Serialize(theoutput);
             Console.WriteLine(outputjson);
             return;
